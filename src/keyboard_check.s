@@ -24,7 +24,6 @@ END_OF_STRING_LIST = $0F
 
 ; Prepares PPUDATA register for writes, starting at the supplied address
 .macro set_ppu_addr addr
-	LDA PPUSTATUS   ; read PPU status to reset the high/low latch to high
 	LDA #(>addr)
 	STA PPUADDR
 	LDA #(<addr)
@@ -95,6 +94,8 @@ buffer_ready:
 puts_string_pointer:
 .res 2
 puts_green_flag:
+.res 1
+soft_ppu_mask:
 .res 1
 
 .segment "RAM"
@@ -188,6 +189,9 @@ nmi:
 	TYA				; copy Y
 	PHA				; save Y
 
+    LDA soft_ppu_mask
+    STA PPUMASK
+
     LDA buffer_ready
     BNE print_from_buffer
     JMP end_of_nmi
@@ -229,6 +233,7 @@ reset:
 	
     LDA #$00
     STA PPUCTRL    ; Disable NMIs
+    STA PPUMASK    ; turn PPU off
 	STA $4010      ; Disable DMC IRQs
 	LDA #$C0
 	STA $4017
@@ -260,6 +265,8 @@ zero_out_loop:
     ; set so that the first inc in the NMI will make it zero
 	LDA #$FF
     STA key_checked
+
+	LDA PPUSTATUS   ; read PPU status to reset the high/low latch to high
 
     ; clear nametable
     set_ppu_addr NAMETABLE_START
@@ -310,7 +317,7 @@ palette_loop:
 	STA PPUSCROLL
 
 	LDA #$0e
-	STA PPUMASK ; Enable backgrounds, but not sprites
+	STA soft_ppu_mask ; Enable backgrounds on next vblank, but not sprites
 
 	LDA #$80
 	STA PPUCTRL ; Enable NMI on vblank
