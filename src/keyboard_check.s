@@ -5,8 +5,6 @@ PPUSCROLL = $2005
 PPUADDR   = $2006
 PPUDATA   = $2007
 
-TOO_BIG_Y = $58
-
 KEYBOARD_MATRIX_ROW_COUNT = 9
 KEYBOARD_MATRIX_KEY_COUNT = KEYBOARD_MATRIX_ROW_COUNT * 8
 
@@ -36,10 +34,22 @@ END_OF_STRING_LIST = $0F
     set_ppu_addr (NAMETABLE_START + (SCREEN_WIDTH * row) + col)
 .endmacro
 
+.macro write_from_buffer col, row, length
+    move_cursor col, row
+    LDX #length
+.scope
+    @string_print_loop:
+    LDA screen_buffer, y
+    STA PPUDATA
+    INY
+    DEX
+    BNE @string_print_loop
+.endscope
+.endmacro
 ; Writes the zero-terminated ASCII string at the specified address to the
 ; nametable
 .macro write_string addr
-   LDA #(<addr)
+    LDA #(<addr)
     STA puts_string_pointer
     LDA #(>addr)
     STA puts_string_pointer + 1
@@ -72,10 +82,6 @@ END_OF_STRING_LIST = $0F
 
 string_list_pointer:
  .res 2
-string_buffer_pointer:
-.res 2
-stopping_point:
- .res 1
 key_scratch_space:
 .res KEYBOARD_MATRIX_ROW_COUNT
 byte_to_test:
@@ -117,7 +123,7 @@ connection_string_2:
     .asciiz "check keyboard connection."
 
 keyboard_strings:
-    newpos 3, 13
+keyboard_row_0:
     flag_terminated_string "F1 "
     flag_terminated_string "F2 "
     flag_terminated_string "F3 "
@@ -126,39 +132,38 @@ keyboard_strings:
     flag_terminated_string "F6 "
     flag_terminated_string "F7 "
     flag_terminated_string "F8"
-    newpos 4, 15
-    flag_terminated_string "1"
-    consecutive_single_chars "234567890-^"
+keyboard_row_1:
+    consecutive_single_chars "1234567890-^"
     ; Note: (1) ca65 treats this as "backslash + space", not an escaped space
     ;       (2) \ is mapped to the Japanese yen symbol
     flag_terminated_string "\ "
     flag_terminated_string "STOP"
-    newpos 13, 17
+keyboard_row_2:
     flag_terminated_string "CLR/HOME "
     flag_terminated_string "INS "
     flag_terminated_string "DEL"
-    newpos 3, 19
+keyboard_row_3:
     flag_terminated_string "ESC "
     consecutive_single_chars "QWERTYUIOP@["
     flag_terminated_string " RETURN"
-    newpos 27, 20
+keyboard_row_4:
     flag_terminated_string .sprintf("%c",$1C)
-    newpos 4, 21
+keyboard_row_5:
     flag_terminated_string "CTR "
     consecutive_single_chars "ASDFGHJKL;:]"
     flag_terminated_string " KANA "
     flag_terminated_string .sprintf("%c ",$1F)
     flag_terminated_string .sprintf("%c",$1E)
-    newpos 27, 22
+keyboard_row_6:
     flag_terminated_string .sprintf("%c",$1D)
-    newpos 3, 23
+keyboard_row_7:
     flag_terminated_string "LSHIFT "
     consecutive_single_chars "ZXCVBNM,./_"
     flag_terminated_string " RSHIFT"
-    newpos 8, 25
+keyboard_row_8:
     flag_terminated_string "GRPH "
     flag_terminated_string "SPACEBAR"
-
+keyboard_row_end:
     .byte END_OF_STRING_LIST
 
 matrix_index_to_screen_order:
@@ -188,53 +193,27 @@ nmi:
 	PHA				; save X
 	TYA				; copy Y
 	PHA				; save Y
-	TSX				; copy stack pointer
 
     LDA buffer_ready
-    BEQ @end_of_nmi
-
-    LDA #(<screen_buffer)
-
-    CLC
-    
-    ADC stopping_point
-    STA string_buffer_pointer
-
-    LDA #(>screen_buffer)
-    ADC #$00
-    STA string_buffer_pointer+1
-
+    BNE print_from_buffer
+    JMP end_of_nmi
+print_from_buffer:
     LDY #$00
-@string_print_loop:
-    LDA (string_buffer_pointer), y
-    CMP #END_OF_STRING_LIST
-    BEQ @done_with_strings
-    BCS @handle_string ; check for control code to move cursor (<$0f)
-    ; Stop early and save our place if we've run for too many iterations.
-    ; We don't want to overrun the vblank period and glitch out the PPU.
-    CPY #TOO_BIG_Y
-    BCS @y_too_big
-    ORA #(>NAMETABLE_START)
-    LDX PPUSTATUS
-    STA PPUADDR
-    INY
-    LDA (string_buffer_pointer), y
-    STA PPUADDR
-    INY
-    BNE @string_print_loop    
-@handle_string:
-    STA PPUDATA
-    INY
-    BNE @string_print_loop 
-@done_with_strings: 
-	LDA #$00
-    BPL @end_of_nmi
-@y_too_big:
-    TYA
-    CLC
-    ADC stopping_point
-@end_of_nmi:
-    STA stopping_point
+
+    ; I stamp out the string writing routine each time so that
+    ; it can just barely finish before the vblank ends.
+    ; There's no time to call subroutines.
+    write_from_buffer 2, 13, (keyboard_row_1 - keyboard_row_0)
+    write_from_buffer 3, 15, (keyboard_row_2 - keyboard_row_1)
+    write_from_buffer 13, 17, (keyboard_row_3 - keyboard_row_2)
+    write_from_buffer 2, 19, (keyboard_row_4 - keyboard_row_3)
+    write_from_buffer 27, 20, (keyboard_row_5 - keyboard_row_4)
+    write_from_buffer 4, 21, (keyboard_row_6 - keyboard_row_5)
+    write_from_buffer 27, 22, (keyboard_row_7 - keyboard_row_6)
+    write_from_buffer 2, 23, (keyboard_row_8 - keyboard_row_7)
+    write_from_buffer 7, 25, (keyboard_row_end - keyboard_row_8)
+
+end_of_nmi:
 	LDA #$00
 	STA PPUSCROLL    ; Set x & y scroll positions to 0
 	STA PPUSCROLL
@@ -319,7 +298,6 @@ write_byte:
 
     move_cursor 4, 10
     write_string connection_string_2
-
 
 	; set palettes
     set_ppu_addr PALETTE_RAM_START
