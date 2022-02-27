@@ -1,2 +1,2 @@
 # nestests
-NES test ROM
+NES test ROMs
