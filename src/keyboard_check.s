@@ -48,6 +48,7 @@ END_OF_STRING_LIST = $0F
     BNE @string_print_loop
 .endscope
 .endmacro
+
 ; Writes the zero-terminated ASCII string at the specified address to the
 ; nametable
 .macro write_string addr
@@ -57,11 +58,6 @@ END_OF_STRING_LIST = $0F
     STA puts_string_pointer + 1
     
     JSR puts
-.endmacro
-
-; Produces 16-bit big-endian offset of character at specified column and row
-.macro newpos col, row
-    .dbyt (SCREEN_WIDTH * row) + col
 .endmacro
 
 ; Produces ASCII string with bit 7 high on the last character
