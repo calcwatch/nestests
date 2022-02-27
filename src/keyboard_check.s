@@ -86,11 +86,7 @@ key_scratch_space:
 .res KEYBOARD_MATRIX_ROW_COUNT
 byte_to_test:
 .res 1
-temp_remapped_byte:
-.res 1
-remapped_bits:
-.res KEYBOARD_MATRIX_ROW_COUNT
-remapped_bits_examined:
+bits_examined:
 .res 1
 key_checked:
 .res 1
@@ -201,7 +197,7 @@ print_from_buffer:
     LDY #$00
 
     ; I stamp out the string writing routine each time so that
-    ; it can just barely finish before the vblank ends.
+    ; it can just _barely_ finish before the vblank ends.
     ; There's no time to call subroutines.
     write_from_buffer 2, 13, (keyboard_row_1 - keyboard_row_0)
     write_from_buffer 3, 15, (keyboard_row_2 - keyboard_row_1)
@@ -366,51 +362,6 @@ key_row_scan_loop:
     CPY #KEYBOARD_MATRIX_ROW_COUNT
     BNE key_row_scan_loop
 
-
-; TODO: See if I can eliminate this and do the bit lookups in the
-;       screen buffer writing section
-    LDX #$00
-    STX temp_remapped_byte
-remapping_loop:
-    LDA matrix_index_to_screen_order, x
-    LSR
-    LSR
-    LSR
-    AND #$1F
-    TAY ; y holds byte # to remap
-    LDA key_scratch_space, y ; now we have the byte but need to test the right flag
-    STA byte_to_test
-    LDA matrix_index_to_screen_order, x
-    AND #$07
-    TAY
-    LDA byte_to_test
-    CLC
-    AND and_bits, y
-    ; if it's zero, the key was hit...
-    BEQ @after_carry_set
-    SEC
-@after_carry_set:
-    ROR temp_remapped_byte
-    TXA
-    AND #$07
-    CMP #$07 ; is it time to write this byte out?
-    BNE increment_bit_to_check
-    ; yes, time to write byte
-    TXA
-    LSR
-    LSR
-    LSR
-    AND #$1F
-    TAY ; y holds byte # to write
-    LDA temp_remapped_byte
-    STA remapped_bits, y
-    LDA #$00
-    STA temp_remapped_byte
-increment_bit_to_check:
-    INX
-    CPX #KEYBOARD_MATRIX_KEY_COUNT
-    BNE remapping_loop
-
 ; Screen buffer writing
     LDA #(<keyboard_strings)
     STA string_list_pointer
@@ -421,18 +372,20 @@ increment_bit_to_check:
 string_list_loop:
     INC key_checked
 
-    LDA key_checked
+    LDX key_checked
+    LDA matrix_index_to_screen_order, x
     LSR
     LSR
     LSR
     AND #$1F
     TAX
-    LDA remapped_bits, x
-    STA remapped_bits_examined
-    LDA key_checked
+    LDA key_scratch_space, x
+    STA bits_examined
+    LDX key_checked
+    LDA matrix_index_to_screen_order, x
     AND #$07
     TAX
-    LDA remapped_bits_examined
+    LDA bits_examined
     AND and_bits, x
     BEQ @set_key_hit
     LDA #$00
