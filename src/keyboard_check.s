@@ -8,6 +8,8 @@ PPUDATA   = $2007
 KEYBOARD_MATRIX_ROW_COUNT = 9
 KEYBOARD_MATRIX_KEY_COUNT = KEYBOARD_MATRIX_ROW_COUNT * 8
 
+ROW_LOAD_DELAY = $0a
+
 NAMETABLE_START = $2000
 NAMETABLE_END = $3000
 NAMETABLE_SIZE = NAMETABLE_END - NAMETABLE_START
@@ -135,7 +137,7 @@ keyboard_row_1:
     flag_terminated_string "\ "
     flag_terminated_string "STOP"
 keyboard_row_2:
-    flag_terminated_string "CLR/HOME "
+    flag_terminated_string "HOME "
     flag_terminated_string "INS "
     flag_terminated_string "DEL"
 keyboard_row_3:
@@ -153,12 +155,12 @@ keyboard_row_5:
 keyboard_row_6:
     flag_terminated_string .sprintf("%c",$1D)
 keyboard_row_7:
-    flag_terminated_string "LSHIFT "
+    flag_terminated_string "SHIFT "
     consecutive_single_chars "ZXCVBNM,./_"
-    flag_terminated_string " RSHIFT"
+    flag_terminated_string " SHIFT"
 keyboard_row_8:
     flag_terminated_string "GRPH "
-    flag_terminated_string "SPACEBAR"
+    flag_terminated_string "SPACE"
 keyboard_row_end:
     .byte END_OF_STRING_LIST
 
@@ -201,7 +203,7 @@ print_from_buffer:
     ; There's no time to call subroutines.
     write_from_buffer 2, 13, (keyboard_row_1 - keyboard_row_0)
     write_from_buffer 3, 15, (keyboard_row_2 - keyboard_row_1)
-    write_from_buffer 13, 17, (keyboard_row_3 - keyboard_row_2)
+    write_from_buffer 17, 17, (keyboard_row_3 - keyboard_row_2)
     write_from_buffer 2, 19, (keyboard_row_4 - keyboard_row_3)
     write_from_buffer 27, 20, (keyboard_row_5 - keyboard_row_4)
     write_from_buffer 4, 21, (keyboard_row_6 - keyboard_row_5)
@@ -327,7 +329,7 @@ infinite_loop:
 key_row_scan_loop:
     LDA #$04   ; "next row" code
 	STA $4016  ; select column 0, next row if not just reset
-	LDX #$0a
+	LDX #ROW_LOAD_DELAY
 @wait_for_row:
 	DEX
 	BNE @wait_for_row
@@ -341,7 +343,7 @@ key_row_scan_loop:
 
 	LDA #$06   ; "next column" code
 	STA $4016  ; select column 1
-	LDX #$0a
+	LDX #ROW_LOAD_DELAY
 @wait_for_column:
 	DEX
 	BNE @wait_for_column
