@@ -20,8 +20,6 @@ PALETTE_RAM_SIZE = PALETTE_RAM_END - PALETTE_RAM_START
 
 SCREEN_WIDTH = $20
 
-END_OF_STRING_LIST = $0F
-
 ; Prepares PPUDATA register for writes, starting at the supplied address
 .macro set_ppu_addr addr
 	LDA #(>addr)
@@ -35,18 +33,18 @@ END_OF_STRING_LIST = $0F
     set_ppu_addr (NAMETABLE_START + (SCREEN_WIDTH * row) + col)
 .endmacro
 
-.macro write_from_buffer col, row, length
+.macro write_from_buffer col, row, start, end
     move_cursor col, row
-    LDX #length
+    LDY #(end - start)
 .scope
     @string_print_loop:
-    LDA screen_buffer, y
+    LDA screen_buffer + keyboard_row_end - end - 1, y
     STA PPUDATA
-    INY
-    DEX
+    DEY
     BNE @string_print_loop
 .endscope
 .endmacro
+
 
 ; Writes the zero-terminated ASCII string at the specified address to the
 ; nametable
@@ -61,10 +59,10 @@ END_OF_STRING_LIST = $0F
 
 ; Produces ASCII string with bit 7 high on the last character
 .macro flag_terminated_string s
-    .repeat .strlen(s)-1, i
+    .repeat .strlen(s) - 1, i
         .byte .strat(s, i)       
     .endrep
-    .byte (.strat(s, .strlen(s)-1) | $80)
+    .byte (.strat(s, .strlen(s) - 1) | $80)
 .endmacro
 
 ; Produces an ASCII string with bit 7 high for all characters.
@@ -83,7 +81,7 @@ key_scratch_space:
 .res KEYBOARD_MATRIX_ROW_COUNT
 byte_to_test:
 .res 1
-bits_examined:
+temp_buffer_write_byte:
 .res 1
 key_checked:
 .res 1
@@ -159,7 +157,6 @@ keyboard_row_8:
     flag_terminated_string "GRPH "
     flag_terminated_string "SPACE"
 keyboard_row_end:
-    .byte END_OF_STRING_LIST
 
 matrix_index_to_screen_order:
 .byte 56, 48, 40, 32, 24, 16, 8, 0
@@ -195,21 +192,22 @@ nmi:
     LDA buffer_ready
     BNE print_from_buffer
     JMP end_of_nmi
+
 print_from_buffer:
     LDY #$00
 
     ; I stamp out the string writing routine each time so that
     ; it can just _barely_ finish before the vblank ends.
     ; There's no time to call subroutines.
-    write_from_buffer 2, 13, (keyboard_row_1 - keyboard_row_0)
-    write_from_buffer 3, 15, (keyboard_row_2 - keyboard_row_1)
-    write_from_buffer 17, 17, (keyboard_row_3 - keyboard_row_2)
-    write_from_buffer 2, 19, (keyboard_row_4 - keyboard_row_3)
-    write_from_buffer 27, 20, (keyboard_row_5 - keyboard_row_4)
-    write_from_buffer 4, 21, (keyboard_row_6 - keyboard_row_5)
-    write_from_buffer 27, 22, (keyboard_row_7 - keyboard_row_6)
-    write_from_buffer 2, 23, (keyboard_row_8 - keyboard_row_7)
-    write_from_buffer 7, 25, (keyboard_row_end - keyboard_row_8)
+    write_from_buffer 2, 13, keyboard_row_0, keyboard_row_1
+    write_from_buffer 3, 15, keyboard_row_1, keyboard_row_2
+    write_from_buffer 17, 17, keyboard_row_2, keyboard_row_3
+    write_from_buffer 2, 19, keyboard_row_3, keyboard_row_4
+    write_from_buffer 27, 20, keyboard_row_4, keyboard_row_5
+    write_from_buffer 4, 21, keyboard_row_5, keyboard_row_6
+    write_from_buffer 27, 22, keyboard_row_6, keyboard_row_7
+    write_from_buffer 2, 23, keyboard_row_7, keyboard_row_8
+    write_from_buffer 7, 25, keyboard_row_8, keyboard_row_end
 
 end_of_nmi:
 	LDA #$00
@@ -341,7 +339,7 @@ key_row_scan_loop:
 
 	; do stuff with col 0
 	LSR A; slide it to the right to knock off bit 0 (a "don't care")
-	AND #$0f ; knock off bits we don't care about
+	AND #$0F ; knock off bits we don't care about
 	STA key_scratch_space, y ; store in temp space for now
 
 	LDA #$06   ; "next column" code
@@ -367,7 +365,8 @@ key_row_scan_loop:
     CPY #KEYBOARD_MATRIX_ROW_COUNT
     BNE key_row_scan_loop
 
-; Screen buffer writing
+; Screen buffer writing: It writes the buffer out backwards so that the
+; print loops can decrement Y until Y==0, saving the need for an X iterator
     LDA #(<keyboard_strings)
     STA string_list_pointer
     LDA #(>keyboard_strings)
@@ -375,6 +374,9 @@ key_row_scan_loop:
 
     LDY #$00
 string_list_loop:
+    CPY #(keyboard_row_end - keyboard_strings)
+    BEQ done_with_strings
+
     INC key_checked
 
     LDX key_checked
@@ -385,12 +387,12 @@ string_list_loop:
     AND #$1F
     TAX
     LDA key_scratch_space, x
-    STA bits_examined
+    STA temp_buffer_write_byte
     LDX key_checked
     LDA matrix_index_to_screen_order, x
     AND #$07
     TAX
-    LDA bits_examined
+    LDA temp_buffer_write_byte
     AND and_bits, x
     BEQ @set_key_hit
     LDA #$00
@@ -401,29 +403,24 @@ string_list_loop:
     STA key_hit
     BNE @load_string
 @load_string:
-    LDA (string_list_pointer), y
-    CMP #END_OF_STRING_LIST
-    BEQ done_with_strings
-    BCS @handle_string ; check if control code to move cursor (<$0f)
-    STA screen_buffer, y
-    INY
-    LDA (string_list_pointer), y
-    STA screen_buffer, y
-    INY
-    LDA (string_list_pointer), y
-@handle_string:
+    LDA keyboard_strings, y
 string_write_loop:
-    TAX
+    STA temp_buffer_write_byte
+    TYA         ; A = Y
+    EOR #$FF    ; A = -Y - 1
+    CLC
+    ADC #(keyboard_row_end - keyboard_strings) ; A = buffer_length - Y - 1
+    TAX                                        ; X = buffer_length - Y - 1
+    LDA temp_buffer_write_byte
     AND #$7F
     ORA key_hit
-    STA screen_buffer, y
+    STA screen_buffer, x
     INY
-    TXA
+    LDA temp_buffer_write_byte
     BMI string_list_loop  ; byte with b7==1 means it's the last char of the string
-    LDA (string_list_pointer), y
-    BNE string_write_loop ; branch always, since next byte after a byte with b7==0 here should not be 0
+    LDA keyboard_strings, y
+    BNE string_write_loop ; branch always, since bytes in string list should never be 0
 done_with_strings:
-    STA screen_buffer, y
 	LDA #$FF
     STA key_checked
 
