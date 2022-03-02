@@ -22,10 +22,10 @@ SCREEN_WIDTH = $20
 
 ; Prepares PPUDATA register for writes, starting at the supplied address
 .macro set_ppu_addr addr
-	LDA #(>addr)
-	STA PPUADDR
-	LDA #(<addr)
-	STA PPUADDR
+    LDA #(>addr)
+    STA PPUADDR
+    LDA #(<addr)
+    STA PPUADDR
 .endmacro
 
 ; Sets the PPU up to write to the nametable at the specified column and row
@@ -53,7 +53,6 @@ SCREEN_WIDTH = $20
     STA puts_string_pointer
     LDA #(>addr)
     STA puts_string_pointer + 1
-    
     JSR puts
 .endmacro
 
@@ -76,29 +75,30 @@ SCREEN_WIDTH = $20
 .segment "ZEROPAGE"
 
 string_list_pointer:
- .res 2
+    .res 2
 key_scratch_space:
-.res KEYBOARD_MATRIX_ROW_COUNT
+    .res KEYBOARD_MATRIX_ROW_COUNT
 byte_to_test:
-.res 1
+    .res 1
 temp_buffer_write_byte:
-.res 1
+    .res 1
 key_checked:
-.res 1
+    .res 1
 key_hit:
-.res 1
+    .res 1
 buffer_ready:
-.res 1
+    .res 1
 puts_string_pointer:
-.res 2
+    .res 2
 puts_green_flag:
-.res 1
+    .res 1
 soft_ppu_mask:
-.res 1
+    .res 1
 
 .segment "RAM"
+
 screen_buffer:
-.res $100
+    .res $100
 
 .segment "RODATA"
 
@@ -159,32 +159,32 @@ keyboard_row_8:
 keyboard_row_end:
 
 matrix_index_to_screen_order:
-.byte 56, 48, 40, 32, 24, 16, 8, 0
-.byte 62, 63, 55, 47, 46, 39, 38, 31
-.byte 30, 23, 14, 15, 6, 7, 64, 71
-.byte 70, 57, 58, 49, 54, 42, 41, 33
-.byte 26, 25, 17, 22, 9, 2, 1, 65
-.byte 59, 51, 50, 43, 44, 34, 35, 27
-.byte 19, 18, 11, 10, 3, 4, 67, 66
-.byte 68, 60, 53, 52, 45, 37, 36, 29
-.byte 28, 21, 20, 13, 12, 5, 61, 69
+    .byte 56, 48, 40, 32, 24, 16, 8, 0
+    .byte 62, 63, 55, 47, 46, 39, 38, 31
+    .byte 30, 23, 14, 15, 6, 7, 64, 71
+    .byte 70, 57, 58, 49, 54, 42, 41, 33
+    .byte 26, 25, 17, 22, 9, 2, 1, 65
+    .byte 59, 51, 50, 43, 44, 34, 35, 27
+    .byte 19, 18, 11, 10, 3, 4, 67, 66
+    .byte 68, 60, 53, 52, 45, 37, 36, 29
+    .byte 28, 21, 20, 13, 12, 5, 61, 69
 
 and_bits:
-.byte $01, $02, $04, $08, $10, $20, $40, $80
+    .byte $01, $02, $04, $08, $10, $20, $40, $80
 
 palette_data:
 .repeat 8
-        .byte $0f,$0f,$00,$3A
+    .byte $0f,$0f,$00,$3A
 .endrep
 
 .segment "CODE"
 
 nmi:
-	PHA				; save A
-	TXA				; copy X
-	PHA				; save X
-	TYA				; copy Y
-	PHA				; save Y
+    PHA                             ; save A
+    TXA                             ; copy X
+    PHA                             ; save X
+    TYA                             ; copy Y
+    PHA                             ; save Y
 
     LDA soft_ppu_mask
     STA PPUMASK
@@ -210,15 +210,15 @@ print_from_buffer:
     write_from_buffer 7, 25, keyboard_row_8, keyboard_row_end
 
 end_of_nmi:
-	LDA #$00
-	STA PPUSCROLL    ; Set x & y scroll positions to 0
-	STA PPUSCROLL
+    LDA #$00
+    STA PPUSCROLL    ; Set x & y scroll positions to 0
+    STA PPUSCROLL
 
-	PLA				; pull Y
-	TAY				; restore Y
-	PLA				; pull X
-	TAX				; restore X
-	PLA				; restore A
+    PLA                             ; pull Y
+    TAY                             ; restore Y
+    PLA                             ; pull X
+    TAX                             ; restore X
+    PLA                             ; restore A
     RTI
 
 ; Not used
@@ -228,23 +228,23 @@ irq:
 reset:
     SEI
     CLD            ; Disable binary-encoded decimal support, by convention
-	
+        
     LDA #$00
     STA PPUCTRL    ; Disable NMIs
     STA PPUMASK    ; turn PPU off
-	STA $4010      ; Disable DMC IRQs
-	LDA #$C0
-	STA $4017
+    STA $4010      ; Disable DMC IRQs
+    LDA #$C0
+    STA $4017
 
     LDX #$02       ; Wait for 2 vblanks so that the PPU can warm up
 @wait_for_ppu:
-	BIT PPUSTATUS
-	BPL @wait_for_ppu
-	DEX
-	BNE @wait_for_ppu
+    BIT PPUSTATUS
+    BPL @wait_for_ppu
+    DEX
+    BNE @wait_for_ppu
 
-    LDX	#$FF		; set X for stack
-	TXS				; clear stack
+    LDX #$FF            ; set X for stack
+        TXS             ; clear stack
 
     ; clear RAM
     LDA #$00
@@ -261,10 +261,10 @@ zero_out_loop:
     BNE zero_out_loop
     
     ; set so that the first inc in the NMI will make it zero
-	LDA #$FF
+    LDA #$FF
     STA key_checked
 
-	LDA PPUSTATUS   ; read PPU status to reset the high/low latch to high
+    LDA PPUSTATUS   ; read PPU status to reset the high/low latch to high
 
     ; clear nametable
     set_ppu_addr NAMETABLE_START
@@ -298,67 +298,67 @@ write_byte:
     move_cursor 4, 10
     write_string connection_string_2
 
-	; set palettes
+        ; set palettes
     set_ppu_addr PALETTE_RAM_START
 
-	LDX #$00
+    LDX #$00
 
 palette_loop:
-	LDA palette_data, x
-	STA PPUDATA    ; Write palette color to PPU
-	INX
-	CPX #PALETTE_RAM_SIZE
-	BNE palette_loop
+    LDA palette_data, x
+    STA PPUDATA    ; Write palette color to PPU
+    INX
+    CPX #PALETTE_RAM_SIZE
+    BNE palette_loop
 
-	LDA #$00
-	STA PPUSCROLL    ; Set x & y scroll positions to 0
-	STA PPUSCROLL
+    LDA #$00
+    STA PPUSCROLL    ; Set x & y scroll positions to 0
+    STA PPUSCROLL
 
-	LDA #$0e
-	STA soft_ppu_mask ; Enable backgrounds on next vblank, but not sprites
+    LDA #$0e
+    STA soft_ppu_mask ; Enable backgrounds on next vblank, but not sprites
 
-	LDA #$80
-	STA PPUCTRL ; Enable NMI on vblank
+    LDA #$80
+    STA PPUCTRL ; Enable NMI on vblank
 
- 	CLI				; enable the interrupts
+    CLI         ; Enable the interrupts
 
 infinite_loop:
     LDY #$00; keyboard row count
 
-	LDA #$05	; reset code
-	STA $4016   ; reset keyboard scan to row 0, column 0
+    LDA #$05    ; reset code
+    STA $4016   ; reset keyboard scan to row 0, column 0
 key_row_scan_loop:
     LDA #$04   ; "next row" code
-	STA $4016  ; select column 0, next row if not just reset
-	LDX #ROW_LOAD_DELAY
+    STA $4016  ; select column 0, next row if not just reset
+    LDX #ROW_LOAD_DELAY
 @wait_for_row:
-	DEX
-	BNE @wait_for_row
+    DEX
+    BNE @wait_for_row
 
-	LDA $4017  ; read column 0 data
+    LDA $4017  ; read column 0 data
 
-	; do stuff with col 0
-	LSR A; slide it to the right to knock off bit 0 (a "don't care")
-	AND #$0F ; knock off bits we don't care about
-	STA key_scratch_space, y ; store in temp space for now
+    ; do stuff with col 0
+    LSR A; slide it to the right to knock off bit 0 (a "don't care")
+    AND #$0F ; knock off bits we don't care about
+    STA key_scratch_space, y ; store in temp space for now
 
-	LDA #$06   ; "next column" code
-	STA $4016  ; select column 1
-	LDX #ROW_LOAD_DELAY
+    LDA #$06   ; "next column" code
+    STA $4016  ; select column 1
+    LDX #ROW_LOAD_DELAY
 @wait_for_column:
-	DEX
-	BNE @wait_for_column
+    DEX
+    BNE @wait_for_column
 
-	LDA $4017  ; read column 1 data
+    LDA $4017  ; read column 1 data
 
-	LDX	#$08	; set the column count
+    LDX     #$08    ; set the column count
 
-	; do stuff with col 1
-	ASL a
-	ASL a
-	ASL a
-	AND #$f0 ; knock off bits we don't care about
-	ORA key_scratch_space, y ; join it with the bits from col 0
+    ; do stuff with col 1
+    ASL a
+    ASL a
+    ASL a
+    AND #$f0 ; knock off bits we don't care about
+    ORA key_scratch_space, y ; join it with the bits from col 0
     STA key_scratch_space, y
     INY
 
@@ -421,7 +421,7 @@ string_write_loop:
     LDA keyboard_strings, y
     BNE string_write_loop ; branch always, since bytes in string list should never be 0
 done_with_strings:
-	LDA #$FF
+    LDA #$FF
     STA key_checked
 
     LDA #$01
@@ -457,6 +457,6 @@ puts:
 
 .segment "VECTORS"
 
-.word nmi
-.word reset
-.word irq
+.addr nmi
+.addr reset
+.addr irq
