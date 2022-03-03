@@ -38,13 +38,12 @@ SCREEN_WIDTH = $20
     ldy #(end - start)
 .scope
     @string_print_loop:
-    lda screen_buffer + keyboard_row_end - end - 1, y
-    sta PPUDATA
-    dey
-    bne @string_print_loop
+        lda screen_buffer + keyboard_row_end - end - 1, y
+        sta PPUDATA
+        dey
+        bne @string_print_loop
 .endscope
 .endmacro
-
 
 ; Writes the zero-terminated ASCII string at the specified address to the
 ; nametable
@@ -65,11 +64,15 @@ SCREEN_WIDTH = $20
 .endmacro
 
 ; Produces an ASCII string with bit 7 high for all characters.
-; Used create multiple single character "flag-terminated strings" at once
+; Used to create multiple single character "flag-terminated strings" at once
 .macro consecutive_single_chars s
     .repeat .strlen(s), i
         .byte (.strat(s, i) | $80)       
     .endrep
+.endmacro
+
+.macro matrix_index row, col, bit_num
+    .byte (row * 8) + (col * 4) + bit_num - 1
 .endmacro
 
 .segment "ZEROPAGE"
@@ -158,16 +161,79 @@ keyboard_row_8:
     flag_terminated_string "SPACE"
 keyboard_row_end:
 
-matrix_index_to_screen_order:
-    .byte 56, 48, 40, 32, 24, 16, 8, 0
-    .byte 62, 63, 55, 47, 46, 39, 38, 31
-    .byte 30, 23, 14, 15, 6, 7, 64, 71
-    .byte 70, 57, 58, 49, 54, 42, 41, 33
-    .byte 26, 25, 17, 22, 9, 2, 1, 65
-    .byte 59, 51, 50, 43, 44, 34, 35, 27
-    .byte 19, 18, 11, 10, 3, 4, 67, 66
-    .byte 68, 60, 53, 52, 45, 37, 36, 29
-    .byte 28, 21, 20, 13, 12, 5, 61, 69
+screen_order_to_matrix_index:
+    matrix_index 7, 0, 1    ; 'F1'
+    matrix_index 6, 0, 1    ; 'F2'
+    matrix_index 5, 0, 1    ; 'F3'
+    matrix_index 4, 0, 1    ; 'F4'
+    matrix_index 3, 0, 1    ; 'F5'
+    matrix_index 2, 0, 1    ; 'F6'
+    matrix_index 1, 0, 1    ; 'F7'
+    matrix_index 0, 0, 1    ; 'F8'
+    matrix_index 7, 1, 3    ; '1'
+    matrix_index 7, 1, 4    ; '2'
+    matrix_index 6, 1, 4    ; '3'
+    matrix_index 5, 1, 4    ; '4'
+    matrix_index 5, 1, 3    ; '5'
+    matrix_index 4, 1, 4    ; '6'
+    matrix_index 4, 1, 3    ; '7'
+    matrix_index 3, 1, 4    ; '8'
+    matrix_index 3, 1, 3    ; '9'
+    matrix_index 2, 1, 4    ; '0'
+    matrix_index 1, 1, 3    ; '-'
+    matrix_index 1, 1, 4    ; '^'
+    matrix_index 0, 1, 3    ; Japanese Yen symbol
+    matrix_index 0, 1, 4    ; 'STOP'
+    matrix_index 8, 0, 1    ; 'HOME'
+    matrix_index 8, 1, 4    ; 'INS'
+    matrix_index 8, 1, 3    ; 'DEL'
+    matrix_index 7, 0, 2    ; 'ESC'
+    matrix_index 7, 0, 3    ; 'Q'
+    matrix_index 6, 0, 2    ; 'W'
+    matrix_index 6, 1, 3    ; 'E'
+    matrix_index 5, 0, 3    ; 'R'
+    matrix_index 5, 0, 2    ; 'T'
+    matrix_index 4, 0, 2    ; 'Y'
+    matrix_index 3, 0, 3    ; 'U'
+    matrix_index 3, 0, 2    ; 'I'
+    matrix_index 2, 0, 2    ; 'O'
+    matrix_index 2, 1, 3    ; 'P'
+    matrix_index 1, 0, 2    ; '@'
+    matrix_index 0, 0, 3    ; '['
+    matrix_index 0, 0, 2    ; 'RETURN'
+    matrix_index 8, 0, 2    ; 'UP'
+    matrix_index 7, 0, 4    ; 'CTR'
+    matrix_index 6, 0, 4    ; 'A'
+    matrix_index 6, 0, 3    ; 'S'
+    matrix_index 5, 0, 4    ; 'D'
+    matrix_index 5, 1, 1    ; 'F'
+    matrix_index 4, 0, 3    ; 'G'
+    matrix_index 4, 0, 4    ; 'H'
+    matrix_index 3, 0, 4    ; 'J'
+    matrix_index 2, 0, 4    ; 'K'
+    matrix_index 2, 0, 3    ; 'L'
+    matrix_index 1, 0, 4    ; ';'
+    matrix_index 1, 0, 3    ; ':'
+    matrix_index 0, 0, 4    ; ']'
+    matrix_index 0, 1, 1    ; 'KANA'
+    matrix_index 8, 0, 4    ; 'LEFT'
+    matrix_index 8, 0, 3    ; 'RIGHT'
+    matrix_index 8, 1, 1    ; 'DOWN'
+    matrix_index 7, 1, 1    ; 'SHIFT' (left)
+    matrix_index 6, 1, 2    ; 'Z'
+    matrix_index 6, 1, 1    ; 'X'
+    matrix_index 5, 1, 2    ; 'C'
+    matrix_index 4, 1, 2    ; 'V'
+    matrix_index 4, 1, 1    ; 'B'
+    matrix_index 3, 1, 2    ; 'N'
+    matrix_index 3, 1, 1    ; 'M'
+    matrix_index 2, 1, 2    ; ','
+    matrix_index 2, 1, 1    ; '.'
+    matrix_index 1, 1, 2    ; '/'
+    matrix_index 1, 1, 1    ; '_'
+    matrix_index 0, 1, 2    ; 'SHIFT' (right)
+    matrix_index 7, 1, 2    ; 'GRPH'
+    matrix_index 8, 1, 2    ; 'SPACE'
 
 and_bits:
     .byte $01, $02, $04, $08, $10, $20, $40, $80
@@ -380,7 +446,7 @@ string_list_loop:
     inc key_checked
 
     ldx key_checked
-    lda matrix_index_to_screen_order, x
+    lda screen_order_to_matrix_index, x
     lsr
     lsr
     lsr
@@ -389,7 +455,7 @@ string_list_loop:
     lda key_scratch_space, x
     sta temp_buffer_write_byte
     ldx key_checked
-    lda matrix_index_to_screen_order, x
+    lda screen_order_to_matrix_index, x
     and #$07
     tax
     lda temp_buffer_write_byte
