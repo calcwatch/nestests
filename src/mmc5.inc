@@ -16,6 +16,7 @@ PRG_BANKSWITCHING_AXXX .byte
 PRG_BANKSWITCHING_CXXX .byte
 PRG_BANKSWITCHING_EXXX .byte
                        .org $5120
+; Misleading names, since they only apply to 1 kB CHR bank mode
 CHR_BANKSWITCHING_00XX .byte
 CHR_BANKSWITCHING_04XX .byte
 CHR_BANKSWITCHING_08XX .byte

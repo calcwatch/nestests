@@ -5,6 +5,13 @@ NAMETABLE_START = $2000
 NAMETABLE_END = $2400
 NAMETABLE_SIZE = NAMETABLE_END - NAMETABLE_START
 
+.enum TestStatus
+    not_started = 0
+    running
+    passed
+    failed
+.endenum
+
 ; Writes the zero-terminated ASCII string at the specified address to the
 ; nametable
 .macro write_string addr
@@ -53,9 +60,7 @@ product:
     .res 2
 hex_temp:
     .res 1
-started_test_loop:
-    .res 1
-test_result:
+test_status:
     .res 1
 
 .segment "RAM"
@@ -72,10 +77,16 @@ placeholder_equation:
     .asciiz "$__ * $__ = $____"
 expected_result:
     .asciiz "(Expected:  $____)"
+test_string:
+    .asciiz "Test "
+failed_string:
+    .asciiz "FAILED."
+passed_string:
+    .asciiz "PASSED."
 
 palette_data:
 .repeat 8
-    .byte $0f,$0f,$00,$3A
+    .byte $0f,$0f,$00,$3a
 .endrep
 
 .segment "CODE"
@@ -128,19 +139,18 @@ zero_out_loop:
 
     ; enable 4 8kB banks
     lda #$03
-    sta $5100
+    sta MMC5::PRG_MODE
 
-    ; enable 2 4kB CHR page
+    ; enable 2 4kB CHR pages
     lda #$01
-    sta $5101
+    sta MMC5::CHR_MODE
 
     ; point all PPU nametable pages to VRAM page 0
     lda #$00
-    sta $5105
+    sta MMC5::NAMETABLE_MAPPING
 
     ; select bank 0 for tiles
-    lda #$00
-    STA $5123
+    sta MMC5::CHR_BANKSWITCHING_0CXX
 
     lda PPU::STATUS   ; read PPU status to reset the high/low latch to high
 
@@ -168,7 +178,6 @@ write_byte:
 
     move_cursor 7, 11
     write_string expected_result
-
 
     ; set palettes
     set_ppu_addr PALETTE_RAM_START
@@ -199,8 +208,8 @@ infinite_loop:
     jmp infinite_loop
 
 multiplier_test:
-    lda #$01
-    sta started_test_loop
+    lda #TestStatus::running
+    sta test_status
 
     ldx #$00
     ldy #$00
@@ -209,8 +218,8 @@ multiplicand_loop:
     lda #$00
     sta sum
     sta sum+1
-multiplier_loop:
     stx MMC5::Multiplier::Factors::MULTIPLICAND
+multiplier_loop:
     sty MMC5::Multiplier::Factors::MULTIPLIER
 
     lda MMC5::Multiplier::PRODUCT
@@ -251,32 +260,34 @@ multiplier_loop:
     lda product+1
     sta sum+1
 
+    lda #TestStatus::passed
+    sta test_status
+
     bne done
 
 test_failed:
-    lda #$AB
-    sta test_result
+    lda #TestStatus::failed
+    sta test_status
 done:
-    
     rts
 
 nmi:
-    pha                             ; save A
-    txa                             ; copy X
-    pha                             ; save X
-    tya                             ; copy Y
-    pha                             ; save Y
+    ; Save x, y & a
+    pha
+    txa
+    pha
+    tya
+    pha
 
     lda soft_ppu_mask
     sta PPU::MASK
 
-    lda started_test_loop
+    lda test_status
     bne print_numbers
 
     jmp done_printing_numbers
 
 print_numbers:
-
     move_cursor 8, 9
     txa
     print_hex_byte
@@ -297,16 +308,37 @@ print_numbers:
     lda sum
     print_hex_byte
 
+    lda test_status
 done_printing_numbers:
+    cmp #TestStatus::running
+    beq done_printing_status
+
+    move_cursor 10, 14
+    write_string test_string
+
+    lda test_status
+    cmp #TestStatus::passed
+    beq print_passed
+
+    ; Only one other possibility
+    write_string failed_string
+
+    jmp done_printing_status
+
+print_passed:
+    write_string passed_string
+
+done_printing_status:
     lda #$00
     sta PPU::SCROLL    ; Set x & y scroll positions to 0
     sta PPU::SCROLL
 
-    pla                             ; pull Y
-    tay                             ; restore Y
-    pla                             ; pull X
-    tax                             ; restore X
-    pla                             ; restore A
+    ; Restore x, y & a
+    pla
+    tay
+    pla
+    tax
+    pla
     rti
 
 
