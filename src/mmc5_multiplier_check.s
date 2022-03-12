@@ -129,7 +129,7 @@ reset:
 zero_out_loop:
     sta $00, x
     sta $200, x
-    STA $300, x
+    sta $300, x
     sta $400, x
     sta $500, x
     sta $600, x
