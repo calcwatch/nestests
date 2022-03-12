@@ -1,9 +1,4 @@
-PPUCTRL   = $2000
-PPUMASK   = $2001
-PPUSTATUS = $2002
-PPUSCROLL = $2005
-PPUADDR   = $2006
-PPUDATA   = $2007
+.include "common.inc"
 
 KEYBOARD_MATRIX_ROW_COUNT = 9
 KEYBOARD_MATRIX_KEY_COUNT = KEYBOARD_MATRIX_ROW_COUNT * 8
@@ -11,27 +6,8 @@ KEYBOARD_MATRIX_KEY_COUNT = KEYBOARD_MATRIX_ROW_COUNT * 8
 ROW_LOAD_DELAY = $0a
 
 NAMETABLE_START = $2000
-NAMETABLE_END = $3000
+NAMETABLE_END = $2400
 NAMETABLE_SIZE = NAMETABLE_END - NAMETABLE_START
-
-PALETTE_RAM_START = $3F00
-PALETTE_RAM_END = $3F20
-PALETTE_RAM_SIZE = PALETTE_RAM_END - PALETTE_RAM_START
-
-SCREEN_WIDTH = $20
-
-; Prepares PPUDATA register for writes, starting at the supplied address
-.macro set_ppu_addr addr
-    lda #(>addr)
-    sta PPUADDR
-    lda #(<addr)
-    sta PPUADDR
-.endmacro
-
-; Sets the PPU up to write to the nametable at the specified column and row
-.macro move_cursor col, row
-    set_ppu_addr (NAMETABLE_START + (SCREEN_WIDTH * row) + col)
-.endmacro
 
 .macro write_from_buffer col, row, start, end
     move_cursor col, row
@@ -39,7 +15,7 @@ SCREEN_WIDTH = $20
 .scope
     @string_print_loop:
         lda screen_buffer + keyboard_row_end - end - 1, y
-        sta PPUDATA
+        sta PPU::DATA
         dey
         bne @string_print_loop
 .endscope
@@ -253,7 +229,7 @@ nmi:
     pha                             ; save Y
 
     lda soft_ppu_mask
-    sta PPUMASK
+    sta PPU::MASK
 
     lda buffer_ready
     bne print_from_buffer
@@ -277,8 +253,8 @@ print_from_buffer:
 
 end_of_nmi:
     lda #$00
-    sta PPUSCROLL    ; Set x & y scroll positions to 0
-    sta PPUSCROLL
+    sta PPU::SCROLL    ; Set x & y scroll positions to 0
+    sta PPU::SCROLL
 
     pla                             ; pull Y
     tay                             ; restore Y
@@ -296,20 +272,20 @@ reset:
     cld            ; Disable binary-encoded decimal support, by convention
         
     lda #$00
-    sta PPUCTRL    ; Disable NMIs
-    sta PPUMASK    ; turn PPU off
-    sta $4010      ; Disable DMC IRQs
+    sta PPU::CTRL       ; Disable NMIs
+    sta PPU::MASK       ; turn PPU off
+    sta APU::IRQ_ENABLE ; Disable DMC IRQs
     lda #$C0
-    sta $4017
+    sta APU::FRAME_COUNTER
 
     ldx #$02       ; Wait for 2 vblanks so that the PPU can warm up
 @wait_for_ppu:
-    bit PPUSTATUS
+    bit PPU::STATUS
     bpl @wait_for_ppu
     dex
     bne @wait_for_ppu
 
-    ldx #$FF            ; set X for stack
+    ldx #$FF        ; set X for stack
     txs             ; clear stack
 
     ; clear RAM
@@ -330,7 +306,7 @@ zero_out_loop:
     lda #$FF
     sta key_checked
 
-    lda PPUSTATUS   ; read PPU status to reset the high/low latch to high
+    lda PPU::STATUS   ; read PPU status to reset the high/low latch to high
 
     ; clear nametable
     set_ppu_addr NAMETABLE_START
@@ -339,7 +315,7 @@ zero_out_loop:
 write_page:
     ldx #$00
 write_byte:
-    sta PPUDATA
+    sta PPU::DATA
     inx
     bne write_byte
     dey
@@ -364,27 +340,27 @@ write_byte:
     move_cursor 4, 10
     write_string connection_string_2
 
-        ; set palettes
+    ; set palettes
     set_ppu_addr PALETTE_RAM_START
 
     ldx #$00
 
 palette_loop:
     lda palette_data, x
-    sta PPUDATA    ; Write palette color to PPU
+    sta PPU::DATA    ; Write palette color to PPU
     inx
     cpx #PALETTE_RAM_SIZE
     bne palette_loop
 
     lda #$00
-    sta PPUSCROLL    ; Set x & y scroll positions to 0
-    sta PPUSCROLL
+    sta PPU::SCROLL    ; Set x & y scroll positions to 0
+    sta PPU::SCROLL
 
     lda #$0E
     sta soft_ppu_mask ; Enable backgrounds on next vblank, but not sprites
 
     lda #$80
-    sta PPUCTRL ; Enable NMI on vblank
+    sta PPU::CTRL ; Enable NMI on vblank
 
     cli         ; Enable the interrupts
 
@@ -508,7 +484,7 @@ puts:
     cmp #'`'
     beq @toggle_green
     eor puts_green_flag
-    sta PPUDATA
+    sta PPU::DATA
     iny
     bne @print_loop ; should branch always, unless we hit 256 chars
     beq @done_printing
